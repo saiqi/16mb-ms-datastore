@@ -92,9 +92,9 @@ class DatastoreService(object):
         return None
 
     @rpc
-    def insert(self, target_table, records, meta, is_partitionned=False, partition_keys=None):
-        if is_partitionned and not partition_keys:
-            raise ValueError('If is_partitionned is true partition_keys has to be set')
+    def insert(self, target_table, records, meta, is_merge_table=False, partition_keys=None):
+        if is_merge_table and not partition_keys:
+            raise ValueError('If is_merge_table is true partition_keys has to be set')
 
         cursor = self.connection.cursor()
 
@@ -102,7 +102,7 @@ class DatastoreService(object):
             cursor.execute('SELECT 1 FROM {table}'.format(table=target_table))
         except pymonetdb.exceptions.OperationalError:
             self.connection.rollback()
-            self._create_table(target_table, meta, is_partitionned, partition_keys)
+            self._create_table(target_table, meta, is_merge_table, partition_keys)
             pass
 
         partition_cache = {}
@@ -110,7 +110,7 @@ class DatastoreService(object):
         try:
             for row in records:
                 working_table = target_table
-                if is_partitionned:
+                if is_merge_table:
                     partition_values = dict((k, row[k]) for k in partition_keys)
                     fingerprint = ''.join(str(row[k]) for k in partition_keys)
 
@@ -142,10 +142,10 @@ class DatastoreService(object):
 
         table = self.database.tables.find_one({'table': target_table})
 
-        is_partitionned = table['is_merge_table']
+        is_merge_table = table['is_merge_table']
         partition_keys = table['keys']
 
-        if is_partitionned:
+        if is_merge_table:
             if len(set(k for k in delete_keys).intersection(set(partition_keys))) != len(partition_keys):
                 raise NotImplementedError('Only supporting delete on partition keys')
 
@@ -155,7 +155,7 @@ class DatastoreService(object):
             cursor = self.connection.cursor()
 
             if len(delete_keys.keys()) > 1:
-                raise NotImplementedError('Not supporting delete on multiple keys on non partitionned table')
+                raise NotImplementedError('Not supporting delete on multiple keys on non merge table')
 
             column = list(delete_keys.keys())[0]
 
@@ -168,47 +168,26 @@ class DatastoreService(object):
                 raise
 
     @rpc
-    def update(self, target_table, update_keys, updated_records):
+    def update(self, target_table, update_key, updated_records):
         table = self.database.tables.find_one({'table': target_table})
 
-        is_partitionned = table['is_merge_table']
-        partition_keys = table['keys']
+        is_merge_table = table['is_merge_table']
 
-        if is_partitionned:
-            if len(set(k for k in update_keys).intersection(set(partition_keys))) != len(partition_keys):
-                raise NotImplementedError('Only supporting update on partition keys')
-
-            if len(set(r for r in updated_records).intersection(set(partition_keys))) != 0:
-                raise NotImplementedError('Can not update partition keys')
-
-            working_table = self._get_partition_name(target_table, update_keys)
-
-            cursor = self.connection.cursor()
-
-            try:
-                cursor.execute(
-                    'UPDATE {table} SET {columns}'.format(table=working_table,
-                                                          columns=','.join(k + '=%s' for k in updated_records)),
-                    list(updated_records.values()))
-            except pymonetdb.exceptions.Error:
-                self.connection.rollback()
-                raise
+        if is_merge_table:
+            raise NotImplementedError('Update not supported for merge table please consider a delete/insert')
         else:
-            if len(update_keys.keys()) > 1:
-                raise NotImplementedError('Not supporting update on multiple keys on non partitionned table')
-
             cursor = self.connection.cursor()
 
             try:
-                params = list(updated_records.values())
-                params.append(list(update_keys.values())[0])
-                columns = ','.join(k + ' = %s' for k in updated_records)
-                key = list(update_keys.keys())[0]
-                cursor.execute(
-                    'UPDATE {table} SET {columns} WHERE {update_key} = %s'.format(table=target_table,
-                                                                                  columns=columns,
-                                                                                  update_key=key)
-                    , params)
+                for row in updated_records:
+                    params = list(row.values())
+                    params.append(row[update_key])
+                    columns = ','.join(k + ' = %s' for k in row)
+                    cursor.execute(
+                        'UPDATE {table} SET {columns} WHERE {update_key} = %s'.format(table=target_table,
+                                                                                      columns=columns,
+                                                                                      update_key=update_key)
+                        , params)
             except pymonetdb.exceptions.Error:
                 self.connection.rollback()
                 raise
@@ -216,8 +195,41 @@ class DatastoreService(object):
         self.connection.commit()
 
     @rpc
-    def upsert(self, target_table, upsert_keys, records, meta, is_partionned=False, partition_keys=None):
-        pass
+    def upsert(self, target_table, upsert_key, records):
+        table = self.database.tables.find_one({'table': target_table})
+
+        is_merge_table = table['is_merge_table']
+
+        if is_merge_table:
+            raise NotImplementedError('Upsert not supported for merge table please consider a delete/insert')
+        else:
+            cursor = self.connection.cursor()
+            try:
+                for row in records:
+                    n = cursor.execute('SELECT 1 FROM {table} WHERE {upsert_key} = %s'.format(table=target_table,
+                                                                                              upsert_key=upsert_key),
+                                       [row[upsert_key]])
+                    if n > 0:
+                        params = list(row.values())
+                        params.append(row[upsert_key])
+                        columns = ','.join(k + ' = %s' for k in row)
+                        cursor.execute(
+                            'UPDATE {table} SET {columns} WHERE {upsert_key} = %s'.format(table=target_table,
+                                                                                          columns=columns,
+                                                                                          upsert_key=upsert_key)
+                            , params)
+                    else:
+                        cursor.execute(
+                            'INSERT INTO {table} ({columns}) VALUES ({records})'.format(table=target_table,
+                                                                                        columns=','.join(
+                                                                                            k for k in row),
+                                                                                        records=','.join(
+                                                                                            ['%s'] * len(row))),
+                            list(row.values()))
+            except pymonetdb.exceptions.Error:
+                self.connection.rollback()
+                raise
+            self.connection.commit()
 
     @rpc
     def bulk_insert(self, target_table, records, meta, is_partionned=False, partition_keys=None):

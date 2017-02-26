@@ -69,7 +69,7 @@ def test_insert(connection, service_database):
 
     assert cursor.fetchone()[0] == 2
 
-    service.insert('PART_INSERT_TABLE', records, meta, is_partitionned=True, partition_keys=['ID'])
+    service.insert('PART_INSERT_TABLE', records, meta, is_merge_table=True, partition_keys=['ID'])
 
     result = service_database.tables.find_one({'table': 'PART_INSERT_TABLE'})
 
@@ -87,7 +87,7 @@ def test_insert(connection, service_database):
 
         assert partition['values']['ID'] == cursor.fetchone()[0]
 
-    service.insert('PART_INSERT_TABLE', [{'ID': 2, 'VALUE': None}], meta, is_partitionned=True, partition_keys=['ID'])
+    service.insert('PART_INSERT_TABLE', [{'ID': 2, 'VALUE': None}], meta, is_merge_table=True, partition_keys=['ID'])
 
     result = service_database.tables.find_one({'table': 'PART_INSERT_TABLE'})
 
@@ -135,24 +135,39 @@ def test_update(connection, service_database):
 
     service.insert('NONPART_UPDATE_TABLE', records, meta)
 
-    service.update('NONPART_UPDATE_TABLE', {'ID': 1}, {'VALUE': 'tata'})
+    service.update('NONPART_UPDATE_TABLE', 'ID', [{'ID': 2, 'VALUE': 'tata'}])
 
     cursor = connection.cursor()
-    cursor.execute('SELECT VALUE FROM NONPART_UPDATE_TABLE')
+    cursor.execute('SELECT VALUE FROM NONPART_UPDATE_TABLE WHERE ID = 2')
 
     assert cursor.fetchone()[0] == 'tata'
 
     service.insert('PART_UPDATE_TABLE', records, meta, True, ['ID'])
 
-    service.update('PART_UPDATE_TABLE', {'ID': 1}, {'VALUE': 'tata'})
+    with pytest.raises(NotImplementedError):
+        service.update('PART_UPDATE_TABLE', 'ID', {'ID': 2, 'VALUE': 'tutu'})
+
+
+def test_upsert(connection, service_database):
+    service = worker_factory(DatastoreService, database=service_database, connection=connection)
+
+    records = [{'ID': 1, 'VALUE': 'toto'}, {'ID': 2, 'VALUE': 'titi'}]
+    meta = [('ID', 'INTEGER'), ('VALUE', 'VARCHAR(5)')]
+
+    service.insert('NONPART_UPSERT_TABLE', records, meta)
+
+    service.upsert('NONPART_UPSERT_TABLE', 'ID', [{'ID': 2, 'VALUE': 'tata'}, {'ID': 3, 'VALUE': 'tutu'}])
 
     cursor = connection.cursor()
-    cursor.execute('SELECT VALUE FROM PART_UPDATE_TABLE')
+    cursor.execute('SELECT VALUE FROM NONPART_UPSERT_TABLE WHERE ID = 2')
 
     assert cursor.fetchone()[0] == 'tata'
 
-    with pytest.raises(NotImplementedError):
-        service.update('PART_UPDATE_TABLE', {'VALUE': 'tata'}, {'VALUE': 'titi'})
+    cursor.execute('SELECT VALUE FROM NONPART_UPSERT_TABLE WHERE ID = 3')
+
+    assert cursor.fetchone()[0] == 'tutu'
+
+    service.insert('PART_UPSERT_TABLE', records, meta, True, ['ID'])
 
     with pytest.raises(NotImplementedError):
-        service.update('PART_UPDATE_TABLE', {'ID': 1}, {'ID': 10})
+        service.upsert('PART_UPSERT_TABLE', 'ID', {'ID': 2, 'VALUE': 'tutu'})
