@@ -14,7 +14,8 @@ class MonetDbConnection(DependencyProvider):
         self.connection = pymonetdb.connect(hostname=self.container.config['MONETDB_HOST'],
                                             username=self.container.config['MONETDB_USER'],
                                             password=self.container.config['MONETDB_PASSWORD'],
-                                            database=self.container.config['MONETDB_DATABASE'])
+                                            database=self.container.config['MONETDB_DATABASE'],
+                                            autocommit=False)
 
     def stop(self):
         self.connection.close()

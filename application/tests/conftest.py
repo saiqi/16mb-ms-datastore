@@ -11,6 +11,12 @@ def pytest_addoption(parser):
     parser.addoption('--test-db-password', action='store', dest='TEST_DB_PASSWORD')
     parser.addoption('--test-db-database', action='store', dest='TEST_DB_DATABASE')
     parser.addoption('--test-db-port', action='store', dest='TEST_DB_PORT')
+    parser.addoption('--test-db-url', action='store', dest='TEST_DB_URL')
+
+
+@pytest.fixture
+def db_url(request):
+    return request.config.getoption('TEST_DB_URL')
 
 
 @pytest.fixture
