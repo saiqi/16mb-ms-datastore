@@ -8,8 +8,6 @@ from nameko_mongodb.database import MongoDatabase
 
 from application.dependencies.monetdb import MonetDbConnection
 
-TYPES = ('VARCHAR', 'BOOLEAN', 'INTEGER', 'FLOAT', 'BIGINT', 'DATE', 'TIMESTAMP', 'TIME', 'JSON',)
-
 
 class DatastoreService(object):
     name = 'datastore_service'
@@ -17,6 +15,11 @@ class DatastoreService(object):
     connection = MonetDbConnection()
 
     database = MongoDatabase()
+
+    @staticmethod
+    def chunks(records, chunksize):
+        for i in range(0, len(records), chunksize):
+            yield records[i: i + chunksize]
 
     def _create_table(self, table_name, meta, is_merge_table, partition_keys):
         columns = ','.join('{name} {type}'.format(name=name, type=data_type) for name, data_type in meta)
@@ -49,6 +52,7 @@ class DatastoreService(object):
         try:
             self.connection.execute('ALTER TABLE {table} ADD TABLE {partition}'.format(table=merge_table_name,
                                                                                        partition=partition_name))
+
             self.connection.commit()
         except pymonetdb.exceptions.Error:
             self.connection.rollback()
@@ -232,5 +236,5 @@ class DatastoreService(object):
             self.connection.commit()
 
     @rpc
-    def bulk_insert(self, target_table, records, meta, is_partionned=False, partition_keys=None):
+    def bulk_insert(self, target_table, records, meta, is_merge_table=False, partition_keys=None, chunksize=100000):
         pass
