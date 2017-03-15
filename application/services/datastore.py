@@ -10,7 +10,7 @@ from application.dependencies.monetdb import MonetDbConnection
 
 
 class DatastoreService(object):
-    name = 'datastore_service'
+    name = 'datastore'
 
     connection = MonetDbConnection()
 
@@ -199,7 +199,17 @@ class DatastoreService(object):
         self.connection.commit()
 
     @rpc
-    def upsert(self, target_table, upsert_key, records):
+    def upsert(self, target_table, upsert_key, records, meta):
+
+        cursor = self.connection.cursor()
+
+        try:
+            cursor.execute('SELECT 1 FROM {table}'.format(table=target_table))
+        except pymonetdb.exceptions.OperationalError:
+            self.connection.rollback()
+            self._create_table(target_table, meta, False, None)
+            pass
+
         table = self.database.tables.find_one({'table': target_table})
 
         is_merge_table = table['is_merge_table']
@@ -207,7 +217,6 @@ class DatastoreService(object):
         if is_merge_table:
             raise NotImplementedError('Upsert not supported for merge table please consider a delete/insert')
         else:
-            cursor = self.connection.cursor()
             try:
                 for row in records:
                     n = cursor.execute('SELECT 1 FROM {table} WHERE {upsert_key} = %s'.format(table=target_table,

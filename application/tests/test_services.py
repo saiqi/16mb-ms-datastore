@@ -156,7 +156,7 @@ def test_upsert(connection, service_database):
 
     service.insert('NONPART_UPSERT_TABLE', records, meta)
 
-    service.upsert('NONPART_UPSERT_TABLE', 'ID', [{'ID': 2, 'VALUE': 'tata'}, {'ID': 3, 'VALUE': 'tutu'}])
+    service.upsert('NONPART_UPSERT_TABLE', 'ID', [{'ID': 2, 'VALUE': 'tata'}, {'ID': 3, 'VALUE': 'tutu'}], meta)
 
     cursor = connection.cursor()
     cursor.execute('SELECT VALUE FROM NONPART_UPSERT_TABLE WHERE ID = 2')
@@ -170,4 +170,11 @@ def test_upsert(connection, service_database):
     service.insert('PART_UPSERT_TABLE', records, meta, True, ['ID'])
 
     with pytest.raises(NotImplementedError):
-        service.upsert('PART_UPSERT_TABLE', 'ID', {'ID': 2, 'VALUE': 'tutu'})
+        service.upsert('PART_UPSERT_TABLE', 'ID', {'ID': 2, 'VALUE': 'tutu'}, meta)
+
+    service.upsert('NONEXTISTED_UPSERT_TABLE', 'ID', [{'ID': 2, 'VALUE': 'tata'}, {'ID': 3, 'VALUE': 'tutu'}], meta)
+
+    cursor = connection.cursor()
+    cursor.execute('SELECT VALUE FROM NONPART_UPSERT_TABLE WHERE ID = 1')
+
+    assert cursor.fetchone()[0] == 'toto'
