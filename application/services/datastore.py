@@ -4,6 +4,7 @@ from string import ascii_lowercase
 
 from nameko.rpc import rpc
 import pymonetdb
+from bson.json_util import loads
 from nameko_mongodb.database import MongoDatabase
 
 from application.dependencies.monetdb import MonetDbConnection
@@ -95,6 +96,11 @@ class DatastoreService(object):
 
         return None
 
+    def _handle_records(self, records):
+        if isinstance(records, str):
+            return loads(records)
+        return records
+
     @rpc
     def insert(self, target_table, records, meta, is_merge_table=False, partition_keys=None):
         if is_merge_table and not partition_keys:
@@ -112,7 +118,7 @@ class DatastoreService(object):
         partition_cache = {}
 
         try:
-            for row in records:
+            for row in self._handle_records(records):
                 working_table = target_table
                 if is_merge_table:
                     partition_values = dict((k, row[k]) for k in partition_keys)
@@ -144,28 +150,30 @@ class DatastoreService(object):
     @rpc
     def delete(self, target_table, delete_keys):
 
+        records = self._handle_records(delete_keys)
+
         table = self.database.tables.find_one({'table': target_table})
 
         is_merge_table = table['is_merge_table']
         partition_keys = table['keys']
 
         if is_merge_table:
-            if len(set(k for k in delete_keys).intersection(set(partition_keys))) != len(partition_keys):
+            if len(set(k for k in records).intersection(set(partition_keys))) != len(partition_keys):
                 raise NotImplementedError('Only supporting delete on partition keys')
 
-            current_partition_name = self._get_partition_name(target_table, delete_keys)
-            self._drop_partition(target_table, current_partition_name, delete_keys)
+            current_partition_name = self._get_partition_name(target_table, records)
+            self._drop_partition(target_table, current_partition_name, records)
         else:
             cursor = self.connection.cursor()
 
-            if len(delete_keys.keys()) > 1:
+            if len(records.keys()) > 1:
                 raise NotImplementedError('Not supporting delete on multiple keys on non merge table')
 
-            column = list(delete_keys.keys())[0]
+            column = list(records.keys())[0]
 
             try:
                 cursor.execute('DELETE FROM {table} WHERE {column} = %s'.format(table=target_table, column=column),
-                               list(delete_keys.values()))
+                               list(records.values()))
                 self.connection.commit()
             except pymonetdb.exceptions.Error:
                 self.connection.rollback()
@@ -183,7 +191,7 @@ class DatastoreService(object):
             cursor = self.connection.cursor()
 
             try:
-                for row in updated_records:
+                for row in self._handle_records(updated_records):
                     params = list(row.values())
                     params.append(row[update_key])
                     columns = ','.join(k + ' = %s' for k in row)
@@ -218,7 +226,7 @@ class DatastoreService(object):
             raise NotImplementedError('Upsert not supported for merge table please consider a delete/insert')
         else:
             try:
-                for row in records:
+                for row in self._handle_records(records):
                     n = cursor.execute('SELECT 1 FROM {table} WHERE {upsert_key} = %s'.format(table=target_table,
                                                                                               upsert_key=upsert_key),
                                        [row[upsert_key]])
