@@ -2,8 +2,8 @@ from weakref import WeakKeyDictionary
 
 import pytest
 from mock import Mock
-from nameko.testing.services import dummy, entrypoint_hook
-from nameko.containers import  WorkerContext
+from nameko.testing.services import dummy
+from nameko.containers import WorkerContext
 import pymonetdb
 
 from application.dependencies.monetdb import MonetDbConnection
@@ -44,7 +44,8 @@ def config(host, user, password, database, port):
         'MONETDB_PASSWORD': password,
         'MONETDB_HOST': host,
         'MONETDB_DATABASE': database,
-        'MONETDB_PORT': port
+        'MONETDB_PORT': port,
+        'max_workers': 2
     }
 
 
@@ -60,15 +61,16 @@ def connection(container):
 
 def test_setup(connection):
     connection.setup()
-    assert isinstance(connection.connection, pymonetdb.sql.connections.Connection)
+    assert isinstance(connection.connection_pool.get(), pymonetdb.sql.connections.Connection)
+    connection.stop()
 
 
 def test_stop(connection):
     connection.setup()
-    assert connection.connection
+    assert connection.connection_pool
 
     connection.stop()
-    assert not hasattr(connection, 'connection')
+    assert not hasattr(connection, 'connection_pool')
 
 
 def test_get_dependency(connection):
@@ -98,6 +100,8 @@ def test_multiple_workers(connection):
         worker_ctx_2: connection_2
     })
 
+    assert connection_1 != connection_2
+
 
 def test_weakref(connection):
     connection.setup()
@@ -109,29 +113,3 @@ def test_weakref(connection):
 
     connection.worker_teardown(worker_ctx)
     assert worker_ctx not in connection.connections
-
-
-def test_end_to_end(host, user, password, database, port, container_factory):
-    config = {
-        'MONETDB_USER': user,
-        'MONETDB_PASSWORD': password,
-        'MONETDB_HOST': host,
-        'MONETDB_DATABASE': database,
-        'MONETDB_PORT': port
-    }
-
-    container = container_factory(DummyService, config)
-    container.start()
-
-    with entrypoint_hook(container, 'create') as create:
-        create()
-
-    with entrypoint_hook(container, 'insert') as insert:
-        insert()
-
-    with entrypoint_hook(container, 'select') as select:
-        res = select()
-        assert 1 in res
-
-    with entrypoint_hook(container, 'drop') as drop:
-        drop()
