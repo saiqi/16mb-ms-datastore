@@ -178,3 +178,16 @@ def test_upsert(connection, service_database):
     cursor.execute('SELECT VALUE FROM NONPART_UPSERT_TABLE WHERE ID = 1')
 
     assert cursor.fetchone()[0] == 'toto'
+
+
+def test_select(connection, service_database):
+    service = worker_factory(DatastoreService, database=service_database, connection=connection)
+    result = service.select('SELECT 1 AS V', None)
+    assert result
+    assert len(result) == 1
+    assert result[0]['v'] == 1
+
+    result = service.select('SELECT * FROM (SELECT 1 AS V UNION ALL SELECT 2 AS V) T WHERE V = %s', (2,))
+    assert result
+    assert len(result) == 1
+    assert result[0]['v'] == 2

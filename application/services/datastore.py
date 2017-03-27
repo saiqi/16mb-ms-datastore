@@ -255,3 +255,27 @@ class DatastoreService(object):
     @rpc
     def bulk_insert(self, target_table, records, meta, is_merge_table=False, partition_keys=None, chunksize=100000):
         pass
+
+    @rpc
+    def select(self, query, params):
+        cursor = self.connection.cursor()
+
+        try:
+            if params is not None:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+        except pymonetdb.exceptions.Error:
+            self.connection.rollback()
+            raise
+
+        meta = [m for r in cursor.description for i, m in enumerate(r) if i == 0]
+
+        data = cursor.fetchall()
+
+        result = list()
+
+        for r in data:
+            result.append(dict(zip(meta, r)))
+
+        return result
