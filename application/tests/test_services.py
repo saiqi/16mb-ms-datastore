@@ -191,3 +191,13 @@ def test_select(connection, service_database):
     assert result
     assert len(result) == 1
     assert result[0]['v'] == 2
+
+
+def test_create_or_replace_view(connection, service_database):
+    service = worker_factory(DatastoreService, database=service_database, connection=connection)
+    service.create_or_replace_view('MYVIEW', 'SELECT 1 AS V', None)
+
+    cursor = connection.cursor()
+    cursor.execute('SELECT * FROM MYVIEW')
+
+    assert cursor.fetchone()[0] == 1

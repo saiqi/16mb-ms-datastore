@@ -279,3 +279,30 @@ class DatastoreService(object):
             result.append(dict(zip(meta, r)))
 
         return result
+
+    @rpc
+    def create_or_replace_view(self, view_name, query, params):
+        cursor = self.connection.cursor()
+        existed = True
+        try:
+            cursor.execute('SELECT 1 FROM {} LIMIT 1'.format(view_name))
+        except pymonetdb.exceptions.OperationalError:
+            self.connection.rollback()
+            existed = False
+            pass
+
+        if existed is True:
+            try:
+                self.connection.execute('DROP VIEW {}'.format(view_name))
+            except pymonetdb.exceptions.Error:
+                self.connection.rollback()
+                raise
+
+        try:
+            if params is not None:
+                cursor.execute('CREATE VIEW {} AS {}'.format(view_name, query), params)
+            else:
+                cursor.execute('CREATE VIEW {} AS {}'.format(view_name, query))
+        except pymonetdb.exceptions.Error:
+            self.connection.rollback()
+            raise
