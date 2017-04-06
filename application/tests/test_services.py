@@ -203,7 +203,7 @@ def test_create_or_replace_view(connection, service_database):
     assert cursor.fetchone()[0] == 1
 
     service.create_or_replace_view('MYVIEW2',
-                                   'SELECT * FROM (SELECT 1 AS V UNION ALL SELECT 2 AS V) T WHERE V = %s', [1])
+                                   'SELECT * FROM MYVIEW WHERE V = %s', [1])
 
     cursor = connection.cursor()
     cursor.execute('SELECT * FROM MYVIEW2')
