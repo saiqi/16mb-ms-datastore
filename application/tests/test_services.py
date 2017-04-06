@@ -202,10 +202,4 @@ def test_create_or_replace_view(connection, service_database):
 
     assert cursor.fetchone()[0] == 1
 
-    service.create_or_replace_view('MYVIEW2',
-                                   'SELECT * FROM MYVIEW WHERE V = %s', [1])
-
-    cursor = connection.cursor()
-    cursor.execute('SELECT * FROM MYVIEW2')
-
-    assert cursor.fetchone()[0] == 1
+    service.create_or_replace_view('MYVIEW', 'SELECT 1 AS V', None)

@@ -298,6 +298,8 @@ class DatastoreService(object):
                 self.connection.rollback()
                 raise
 
+            self.connection.commit()
+
         try:
             if params is not None:
                 cursor.execute('CREATE VIEW {} AS {}'.format(view_name, query), params)
