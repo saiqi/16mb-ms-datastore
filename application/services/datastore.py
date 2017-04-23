@@ -22,15 +22,26 @@ class DatastoreService(object):
         for i in range(0, len(records), chunksize):
             yield records[i: i + chunksize]
 
-    def _create_table(self, table_name, meta, is_merge_table, partition_keys):
-        columns = ','.join('{name} {type}'.format(name=name, type=data_type) for name, data_type in meta)
+    def _create_table(self, table_name, meta, is_merge_table, partition_keys, query=None):
+
+        if meta is not None:
+            columns = ','.join('{name} {type}'.format(name=name, type=data_type) for name, data_type in meta)
 
         try:
             if is_merge_table:
-                self.connection.execute('CREATE MERGE TABLE {table} ({columns})'.format(table=table_name,
-                                                                                        columns=columns))
+                if query is None:
+                    self.connection.execute('CREATE MERGE TABLE {table} ({columns})'.format(table=table_name,
+                                                                                            columns=columns))
+                else:
+                    self.connection.execute(
+                        'CREATE MERGE TABLE {table} AS {query} WITH NO DATA'.format(table=table_name, query=query))
             else:
-                self.connection.execute('CREATE TABLE {table} ({columns})'.format(table=table_name, columns=columns))
+                if query is None:
+                    self.connection.execute(
+                        'CREATE TABLE {table} ({columns})'.format(table=table_name, columns=columns))
+                else:
+                    self.connection.execute(
+                        'CREATE TABLE {table} AS {query} WITH NO DATA'.format(table=table_name, query=query))
             self.connection.commit()
         except pymonetdb.exceptions.Error:
             self.connection.rollback()
@@ -74,8 +85,13 @@ class DatastoreService(object):
         self.database.tables.update_one({'table': merge_table_name},
                                         {'$pull': {'partitions': {'name': partition_name, 'values': partition_values}}})
 
+        self._drop_table(partition_name)
+
     def _get_partition_name(self, merge_table_name, partition_values):
         meta_table = self.database.tables.find_one({'table': merge_table_name}, {'partitions': 1, 'keys': 1})
+
+        if meta_table is None:
+            return None
 
         n = len(partition_values.keys())
 
@@ -89,6 +105,7 @@ class DatastoreService(object):
 
         if 'partitions' in meta_table:
             for partition in meta_table['partitions']:
+                print(partition['values'])
                 v = [o for o in keys if partition['values'][o] == partition_values[o]]
 
                 if len(v) > 0:
@@ -96,10 +113,65 @@ class DatastoreService(object):
 
         return None
 
-    def _handle_records(self, records):
+    @staticmethod
+    def _handle_records(records):
         if isinstance(records, str):
             return loads(records)
         return records
+
+    @rpc
+    def insert_from_select(self, target_table, query, is_merge_table=False, partition_key=None, partition_value=None):
+        if is_merge_table and partition_value is None:
+            raise ValueError('If is_merge_table is true partition_keys has to be set')
+
+        cursor = self.connection.cursor()
+
+        try:
+            cursor.execute('SELECT 1 FROM {}'.format(target_table))
+        except pymonetdb.exceptions.OperationalError:
+            self.connection.rollback()
+            self._create_table(target_table, None, is_merge_table, [partition_key], query)
+            pass
+
+        if is_merge_table:
+
+            try:
+                cursor.execute('SELECT COUNT(*) FROM ({}) T WHERE {} <> %s'.format(query, partition_key),
+                               [partition_value])
+            except pymonetdb.exceptions.Error:
+                self.connection.rollback()
+                raise
+
+            count = cursor.fetchone()[0]
+
+            if count != 0:
+                raise ValueError('Query is returning some values which does not equals to partition value')
+
+            partition_name = self._get_partition_name(target_table, {partition_key: partition_value})
+
+            if partition_name:
+                self._drop_partition(target_table, partition_name, {partition_key: partition_value})
+
+            current_partition_name = ''.join(choice(ascii_lowercase) for i in range(24))
+
+            try:
+                self.connection.execute(
+                    'CREATE TABLE {t} AS SELECT * FROM ({q}) T WITH DATA'.format(t=current_partition_name, q=query))
+                self.connection.commit()
+            except pymonetdb.exceptions.Error:
+                self.connection.rollback()
+                raise
+
+            self._add_partition(target_table, current_partition_name, {partition_key: partition_value})
+
+        else:
+
+            try:
+                self.connection.execute('INSERT INTO {table} {query}'.format(table=target_table, query=query))
+                self.connection.commit()
+            except pymonetdb.exceptions.Error:
+                self.connection.rollback()
+                raise
 
     @rpc
     def insert(self, target_table, records, meta, is_merge_table=False, partition_keys=None):
