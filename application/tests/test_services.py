@@ -210,7 +210,7 @@ def test_insert_from_select(connection, service_database):
 
     query = 'SELECT 0 AS GROUP_ID, 1 AS ID, 15.0 AS VALUE UNION ALL SELECT 0 AS GROUP_ID, 2 AS ID, -5.0 AS VALUE'
 
-    service.insert_from_select('PART_INSERTSELECT_TABLE', query, True, 'GROUP_ID', 0)
+    service.insert_from_select('PART_INSERTSELECT_TABLE', query, None, True, 'GROUP_ID', 0)
 
     cursor = connection.cursor()
     cursor.execute('SELECT VALUE FROM PART_INSERTSELECT_TABLE WHERE ID = 1')
@@ -219,7 +219,7 @@ def test_insert_from_select(connection, service_database):
 
     query = 'SELECT 0 AS GROUP_ID, 1 AS ID, 35.0 AS VALUE UNION ALL SELECT 0 AS GROUP_ID, 2 AS ID, -5.0 AS VALUE'
 
-    service.insert_from_select('PART_INSERTSELECT_TABLE', query, True, 'GROUP_ID', 0)
+    service.insert_from_select('PART_INSERTSELECT_TABLE', query, None, True, 'GROUP_ID', 0)
 
     cursor = connection.cursor()
     cursor.execute('SELECT COUNT(*) FROM PART_INSERTSELECT_TABLE')
@@ -232,10 +232,18 @@ def test_insert_from_select(connection, service_database):
 
     query = 'SELECT 0 AS GROUP_ID, 1 AS ID, 35.0 AS VALUE UNION ALL SELECT 1 AS GROUP_ID, 2 AS ID, -5.0 AS VALUE'
     with pytest.raises(ValueError):
-        service.insert_from_select('PART_INSERTSELECT_TABLE', query, True, 'GROUP_ID', 0)
+        service.insert_from_select('PART_INSERTSELECT_TABLE', query, None, True, 'GROUP_ID', 0)
 
-    service.insert_from_select('NONPART_INSERTSELECT_TABLE', query, False)
+    service.insert_from_select('NONPART_INSERTSELECT_TABLE', query, None, False)
 
     cursor.execute('SELECT VALUE FROM NONPART_INSERTSELECT_TABLE WHERE ID = 2')
 
     assert cursor.fetchone()[0] == -5.
+
+    query = 'SELECT * FROM (SELECT 0 AS GROUP_ID, 1 AS ID, 35.0 AS VALUE) T WHERE ID = %s'
+
+    service.insert_from_select('NONPART_INSERTSELECTP_TABLE', query, [1], False)
+
+    cursor.execute('SELECT VALUE FROM NONPART_INSERTSELECTP_TABLE WHERE ID = 1')
+
+    assert cursor.fetchone()[0] == 35.

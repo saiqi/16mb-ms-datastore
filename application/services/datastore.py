@@ -22,10 +22,12 @@ class DatastoreService(object):
         for i in range(0, len(records), chunksize):
             yield records[i: i + chunksize]
 
-    def _create_table(self, table_name, meta, is_merge_table, partition_keys, query=None):
+    def _create_table(self, table_name, meta, is_merge_table, partition_keys, query=None, params=None):
 
         if meta is not None:
             columns = ','.join('{name} {type}'.format(name=name, type=data_type) for name, data_type in meta)
+
+        cursor = self.connection.cursor()
 
         try:
             if is_merge_table:
@@ -33,19 +35,31 @@ class DatastoreService(object):
                     self.connection.execute('CREATE MERGE TABLE {table} ({columns})'.format(table=table_name,
                                                                                             columns=columns))
                 else:
-                    self.connection.execute(
-                        'CREATE MERGE TABLE {table} AS {query} WITH NO DATA'.format(table=table_name, query=query))
+                    if params is None:
+                        self.connection.execute(
+                            'CREATE MERGE TABLE {table} AS {query} WITH NO DATA'.format(table=table_name, query=query))
+                    else:
+                        cursor.execute(
+                            'CREATE MERGE TABLE {table} AS {query} WITH NO DATA'.format(table=table_name, query=query),
+                            params)
             else:
                 if query is None:
                     self.connection.execute(
                         'CREATE TABLE {table} ({columns})'.format(table=table_name, columns=columns))
                 else:
-                    self.connection.execute(
-                        'CREATE TABLE {table} AS {query} WITH NO DATA'.format(table=table_name, query=query))
+                    if params is None:
+                        self.connection.execute(
+                            'CREATE TABLE {table} AS {query} WITH NO DATA'.format(table=table_name, query=query))
+                    else:
+                        cursor.execute(
+                            'CREATE TABLE {table} AS {query} WITH NO DATA'.format(table=table_name, query=query),
+                            params)
             self.connection.commit()
         except pymonetdb.exceptions.Error:
             self.connection.rollback()
             raise
+        finally:
+            cursor.close()
 
         self.database.tables.insert_one({'table': table_name, 'created_at': datetime.datetime.now(),
                                          'is_merge_table': is_merge_table, 'keys': partition_keys})
@@ -120,7 +134,8 @@ class DatastoreService(object):
         return records
 
     @rpc
-    def insert_from_select(self, target_table, query, is_merge_table=False, partition_key=None, partition_value=None):
+    def insert_from_select(self, target_table, query, params, is_merge_table=False, partition_key=None,
+                           partition_value=None):
         if is_merge_table and partition_value is None:
             raise ValueError('If is_merge_table is true partition_keys has to be set')
 
@@ -130,14 +145,17 @@ class DatastoreService(object):
             cursor.execute('SELECT 1 FROM {}'.format(target_table))
         except pymonetdb.exceptions.OperationalError:
             self.connection.rollback()
-            self._create_table(target_table, None, is_merge_table, [partition_key], query)
+            self._create_table(target_table, None, is_merge_table, [partition_key], query, params)
             pass
 
         if is_merge_table:
 
             try:
-                cursor.execute('SELECT COUNT(*) FROM ({}) T WHERE {} <> %s'.format(query, partition_key),
-                               [partition_value])
+                p = list()
+                if params is not None:
+                    p = params[:]
+                p.append(partition_value)
+                cursor.execute('SELECT COUNT(*) FROM ({}) T WHERE {} <> %s'.format(query, partition_key), p)
             except pymonetdb.exceptions.Error:
                 self.connection.rollback()
                 raise
@@ -155,8 +173,13 @@ class DatastoreService(object):
             current_partition_name = ''.join(choice(ascii_lowercase) for i in range(24))
 
             try:
-                self.connection.execute(
-                    'CREATE TABLE {t} AS SELECT * FROM ({q}) T WITH DATA'.format(t=current_partition_name, q=query))
+                if params is not None:
+                    cursor.execute(
+                        'CREATE TABLE {t} AS SELECT * FROM ({q}) T WITH DATA'.format(t=current_partition_name, q=query),
+                        params)
+                else:
+                    cursor.execute(
+                        'CREATE TABLE {t} AS SELECT * FROM ({q}) T WITH DATA'.format(t=current_partition_name, q=query))
                 self.connection.commit()
             except pymonetdb.exceptions.Error:
                 self.connection.rollback()
@@ -167,7 +190,10 @@ class DatastoreService(object):
         else:
 
             try:
-                self.connection.execute('INSERT INTO {table} {query}'.format(table=target_table, query=query))
+                if params is None:
+                    cursor.execute('INSERT INTO {table} {query}'.format(table=target_table, query=query))
+                else:
+                    cursor.execute('INSERT INTO {table} {query}'.format(table=target_table, query=query), params)
                 self.connection.commit()
             except pymonetdb.exceptions.Error:
                 self.connection.rollback()
