@@ -252,30 +252,31 @@ class DatastoreService(object):
 
         table = self.database.tables.find_one({'table': target_table})
 
-        is_merge_table = table['is_merge_table']
-        partition_keys = table['keys']
+        if table:
+            is_merge_table = table['is_merge_table']
+            partition_keys = table['keys']
 
-        if is_merge_table:
-            if len(set(k for k in records).intersection(set(partition_keys))) != len(partition_keys):
-                raise NotImplementedError('Only supporting delete on partition keys')
+            if is_merge_table:
+                if len(set(k for k in records).intersection(set(partition_keys))) != len(partition_keys):
+                    raise NotImplementedError('Only supporting delete on partition keys')
 
-            current_partition_name = self._get_partition_name(target_table, records)
-            self._drop_partition(target_table, current_partition_name, records)
-        else:
-            cursor = self.connection.cursor()
+                current_partition_name = self._get_partition_name(target_table, records)
+                self._drop_partition(target_table, current_partition_name, records)
+            else:
+                cursor = self.connection.cursor()
 
-            if len(records.keys()) > 1:
-                raise NotImplementedError('Not supporting delete on multiple keys on non merge table')
+                if len(records.keys()) > 1:
+                    raise NotImplementedError('Not supporting delete on multiple keys on non merge table')
 
-            column = list(records.keys())[0]
+                column = list(records.keys())[0]
 
-            try:
-                cursor.execute('DELETE FROM {table} WHERE {column} = %s'.format(table=target_table, column=column),
-                               list(records.values()))
-                self.connection.commit()
-            except pymonetdb.exceptions.Error:
-                self.connection.rollback()
-                raise
+                try:
+                    cursor.execute('DELETE FROM {table} WHERE {column} = %s'.format(table=target_table, column=column),
+                                   list(records.values()))
+                    self.connection.commit()
+                except pymonetdb.exceptions.Error:
+                    self.connection.rollback()
+                    raise
 
     @rpc
     def update(self, target_table, update_key, updated_records):
