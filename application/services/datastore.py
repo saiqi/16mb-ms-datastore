@@ -10,11 +10,6 @@ class DatastoreService(object):
 
     connection = MonetDbConnection()
 
-    @staticmethod
-    def chunks(records, chunksize):
-        for i in range(0, len(records), chunksize):
-            yield records[i: i + chunksize]
-
     def _create_table(self, table_name, meta, query=None, params=None):
 
         if meta is not None:
@@ -194,8 +189,38 @@ class DatastoreService(object):
         self.connection.commit()
 
     @rpc
-    def bulk_insert(self, target_table, records, meta, is_merge_table=False, partition_keys=None, chunksize=100000):
-        pass
+    def bulk_insert(self, target_table, records, meta, mapping=None):
+        cursor = self.connection.cursor()
+
+        try:
+            cursor.execute('SELECT 1 FROM {table}'.format(table=target_table))
+        except pymonetdb.exceptions.OperationalError:
+            self.connection.rollback()
+            self._create_table(target_table, meta)
+            pass
+
+        string_records = list()
+        n = 0
+        for r in self._handle_records(records):
+            ordered_record = list()
+            for m in meta:
+                if mapping is None:
+                    key = m[0]
+                else:
+                    key = mapping[m[0]]
+                ordered_record.append('' if r[key] is None else str(r[key]))
+            string_records.append('|'.join(ordered_record))
+            n += 1
+
+        data = '\n'.join(string_records)
+
+        cmd = 'COPY {n} RECORDS INTO {table} FROM STDIN NULL AS \'\';{data}\n'.format(n=n, table=target_table,
+                                                                                      data=data)
+        try:
+            self.connection.execute(cmd)
+        except pymonetdb.exceptions.Error:
+            self.connection.rollback()
+            raise
 
     @rpc
     def create_or_replace_view(self, view_name, query, params):

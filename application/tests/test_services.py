@@ -113,6 +113,29 @@ def test_upsert(connection):
     assert cursor.fetchone()[0] == 'toto'
 
 
+def test_bulk_insert(connection):
+    service = worker_factory(DatastoreService, connection=connection)
+
+    records = [{'id': 1, 'value': 'toto'}, {'value': 'titi', 'id': 2}]
+    meta = [('ID', 'INTEGER'), ('VALUE', 'VARCHAR(5)')]
+
+    service.bulk_insert('NONPART_BULK_TABLE', records, meta, {'ID': 'id', 'VALUE': 'value'})
+
+    cursor = connection.cursor()
+    cursor.execute('SELECT VALUE FROM NONPART_BULK_TABLE WHERE ID = 2')
+
+    assert cursor.fetchone()[0] == 'titi'
+
+    records = [{'ID': 3, 'VALUE': 'tutu'}, {'ID': 4, 'VALUE': 'tata'}]
+
+    service.bulk_insert('NONPART_BULK_TABLE', records, meta)
+
+    cursor = connection.cursor()
+    cursor.execute('SELECT VALUE FROM NONPART_BULK_TABLE WHERE ID = 4')
+
+    assert cursor.fetchone()[0] == 'tata'
+
+
 def test_create_or_replace_view(connection):
     service = worker_factory(DatastoreService, connection=connection)
     service.create_or_replace_view('MYVIEW', 'SELECT 1 AS V', None)
