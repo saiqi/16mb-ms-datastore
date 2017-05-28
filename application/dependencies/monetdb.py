@@ -16,7 +16,7 @@ class MonetDbConnection(DependencyProvider):
                                             username=self.container.config['MONETDB_USER'],
                                             password=self.container.config['MONETDB_PASSWORD'],
                                             database=self.container.config['MONETDB_DATABASE'],
-                                            autocommit=False)
+                                            autocommit=True)
 
         return conn
 

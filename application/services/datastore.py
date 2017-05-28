@@ -29,20 +29,11 @@ class DatastoreService(object):
                     cursor.execute(
                         'CREATE TABLE {table} AS {query} WITH NO DATA'.format(table=table_name, query=query),
                         params)
-            self.connection.commit()
-        except pymonetdb.exceptions.Error:
-            self.connection.rollback()
-            raise
         finally:
             cursor.close()
 
     def _drop_table(self, table_name):
-        try:
-            self.connection.execute('DROP TABLE {table}'.format(table=table_name))
-            self.connection.commit()
-        except pymonetdb.exceptions.Error:
-            self.connection.rollback()
-            raise
+        self.connection.execute('DROP TABLE {table}'.format(table=table_name))
 
     @staticmethod
     def _handle_records(records):
@@ -61,7 +52,6 @@ class DatastoreService(object):
         try:
             cursor.execute('SELECT 1 FROM {}'.format(target_table))
         except pymonetdb.exceptions.OperationalError:
-            self.connection.rollback()
             self._create_table(target_table, None, query, params)
             pass
 
@@ -70,10 +60,6 @@ class DatastoreService(object):
                 cursor.execute('INSERT INTO {table} {query}'.format(table=target_table, query=query))
             else:
                 cursor.execute('INSERT INTO {table} {query}'.format(table=target_table, query=query), params)
-            self.connection.commit()
-        except pymonetdb.exceptions.Error:
-            self.connection.rollback()
-            raise
         finally:
             cursor.close()
 
@@ -84,7 +70,6 @@ class DatastoreService(object):
         try:
             cursor.execute('SELECT 1 FROM {table}'.format(table=target_table))
         except pymonetdb.exceptions.OperationalError:
-            self.connection.rollback()
             self._create_table(target_table, meta)
             pass
 
@@ -95,10 +80,6 @@ class DatastoreService(object):
                                                                                 columns=','.join(k for k in row),
                                                                                 records=','.join(['%s'] * len(row))),
                     list(row.values()))
-                self.connection.commit()
-        except pymonetdb.exceptions.Error:
-            self.connection.rollback()
-            raise
         finally:
             cursor.close()
 
@@ -113,7 +94,6 @@ class DatastoreService(object):
         try:
             cursor.execute('SELECT 1 FROM {}'.format(target_table))
         except pymonetdb.exceptions.OperationalError:
-            self.connection.rollback()
             table_exists = False
             pass
 
@@ -126,10 +106,6 @@ class DatastoreService(object):
             try:
                 cursor.execute('DELETE FROM {table} WHERE {column} = %s'.format(table=target_table, column=column),
                                list(records.values()))
-                self.connection.commit()
-            except pymonetdb.exceptions.Error:
-                self.connection.rollback()
-                raise
             finally:
                 cursor.close()
 
@@ -148,10 +124,6 @@ class DatastoreService(object):
                                                                                   columns=columns,
                                                                                   update_key=update_key)
                     , params)
-                self.connection.commit()
-        except pymonetdb.exceptions.Error:
-            self.connection.rollback()
-            raise
         finally:
             cursor.close()
 
@@ -163,7 +135,6 @@ class DatastoreService(object):
         try:
             cursor.execute('SELECT 1 FROM {table}'.format(table=target_table))
         except pymonetdb.exceptions.OperationalError:
-            self.connection.rollback()
             self._create_table(target_table, meta)
             pass
 
@@ -189,10 +160,6 @@ class DatastoreService(object):
                                                                                     records=','.join(
                                                                                         ['%s'] * len(row))),
                         list(row.values()))
-                    self.connection.commit()
-        except pymonetdb.exceptions.Error:
-            self.connection.rollback()
-            raise
         finally:
             cursor.close()
 
@@ -203,7 +170,6 @@ class DatastoreService(object):
         try:
             cursor.execute('SELECT 1 FROM {table}'.format(table=target_table))
         except pymonetdb.exceptions.OperationalError:
-            self.connection.rollback()
             self._create_table(target_table, meta)
             pass
 
@@ -224,12 +190,7 @@ class DatastoreService(object):
 
         cmd = 'sCOPY {n} RECORDS INTO {table} FROM STDIN NULL AS \'\';{data}\n'.format(n=n, table=target_table,
                                                                                        data=data)
-        try:
-            self.connection.command(cmd)
-            self.connection.commit()
-        except pymonetdb.exceptions.Error:
-            self.connection.rollback()
-            raise
+        self.connection.command(cmd)
 
     @rpc
     def create_or_replace_view(self, view_name, query, params):
@@ -238,7 +199,6 @@ class DatastoreService(object):
         try:
             cursor.execute('SELECT 1 FROM {} LIMIT 1'.format(view_name))
         except pymonetdb.exceptions.OperationalError:
-            self.connection.rollback()
             existed = False
             pass
 
@@ -250,10 +210,5 @@ class DatastoreService(object):
                 cursor.execute('CREATE VIEW {} AS {}'.format(view_name, query), params)
             else:
                 cursor.execute('CREATE VIEW {} AS {}'.format(view_name, query))
-
-            self.connection.commit()
-        except pymonetdb.exceptions.Error:
-            self.connection.rollback()
-            raise
         finally:
             cursor.close()

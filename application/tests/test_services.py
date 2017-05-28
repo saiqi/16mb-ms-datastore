@@ -7,7 +7,8 @@ from application.services.datastore import DatastoreService
 
 @pytest.fixture
 def connection(host, user, password, database, port):
-    _conn = pymonetdb.connect(username=user, hostname=host, password=password, database=database, port=port)
+    _conn = pymonetdb.connect(username=user, hostname=host, password=password, database=database, port=port,
+                              autocommit=True)
 
     yield _conn
 
@@ -22,9 +23,7 @@ def connection(host, user, password, database, port):
             has_cleaned = True
             try:
                 _conn.execute('DROP TABLE {table}'.format(table=table[0]))
-                _conn.commit()
             except pymonetdb.exceptions.Error:
-                _conn.rollback()
                 continue
 
         return has_cleaned
