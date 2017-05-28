@@ -74,6 +74,8 @@ class DatastoreService(object):
         except pymonetdb.exceptions.Error:
             self.connection.rollback()
             raise
+        finally:
+            cursor.close()
 
     @rpc
     def insert(self, target_table, records, meta):
@@ -93,11 +95,12 @@ class DatastoreService(object):
                                                                                 columns=','.join(k for k in row),
                                                                                 records=','.join(['%s'] * len(row))),
                     list(row.values()))
+                self.connection.commit()
         except pymonetdb.exceptions.Error:
             self.connection.rollback()
             raise
-
-        self.connection.commit()
+        finally:
+            cursor.close()
 
     @rpc
     def delete(self, target_table, delete_keys):
@@ -127,6 +130,8 @@ class DatastoreService(object):
             except pymonetdb.exceptions.Error:
                 self.connection.rollback()
                 raise
+            finally:
+                cursor.close()
 
     @rpc
     def update(self, target_table, update_key, updated_records):
@@ -143,11 +148,12 @@ class DatastoreService(object):
                                                                                   columns=columns,
                                                                                   update_key=update_key)
                     , params)
+                self.connection.commit()
         except pymonetdb.exceptions.Error:
             self.connection.rollback()
             raise
-
-        self.connection.commit()
+        finally:
+            cursor.close()
 
     @rpc
     def upsert(self, target_table, upsert_key, records, meta):
@@ -183,10 +189,12 @@ class DatastoreService(object):
                                                                                     records=','.join(
                                                                                         ['%s'] * len(row))),
                         list(row.values()))
+                    self.connection.commit()
         except pymonetdb.exceptions.Error:
             self.connection.rollback()
             raise
-        self.connection.commit()
+        finally:
+            cursor.close()
 
     @rpc
     def bulk_insert(self, target_table, records, meta, mapping=None):
@@ -214,10 +222,10 @@ class DatastoreService(object):
 
         data = '\n'.join(string_records)
 
-        cmd = 'COPY {n} RECORDS INTO {table} FROM STDIN NULL AS \'\';{data}\n'.format(n=n, table=target_table,
-                                                                                      data=data)
+        cmd = 'sCOPY {n} RECORDS INTO {table} FROM STDIN NULL AS \'\';{data}\n'.format(n=n, table=target_table,
+                                                                                       data=data)
         try:
-            self.connection.execute(cmd)
+            self.connection.command(cmd)
         except pymonetdb.exceptions.Error:
             self.connection.rollback()
             raise
@@ -233,22 +241,18 @@ class DatastoreService(object):
             existed = False
             pass
 
-        if existed is True:
-            try:
-                self.connection.execute('DROP VIEW {}'.format(view_name))
-            except pymonetdb.exceptions.Error:
-                self.connection.rollback()
-                raise
-
-            self.connection.commit()
-
         try:
+            if existed is True:
+                cursor.execute('DROP VIEW {}'.format(view_name))
+
             if params is not None:
                 cursor.execute('CREATE VIEW {} AS {}'.format(view_name, query), params)
             else:
                 cursor.execute('CREATE VIEW {} AS {}'.format(view_name, query))
+
+            self.connection.commit()
         except pymonetdb.exceptions.Error:
             self.connection.rollback()
             raise
-
-        self.connection.commit()
+        finally:
+            cursor.close()
