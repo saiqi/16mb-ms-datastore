@@ -226,6 +226,7 @@ class DatastoreService(object):
                                                                                        data=data)
         try:
             self.connection.command(cmd)
+            self.connection.commit()
         except pymonetdb.exceptions.Error:
             self.connection.rollback()
             raise
