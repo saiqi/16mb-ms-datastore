@@ -212,3 +212,19 @@ class DatastoreService(object):
                 cursor.execute('CREATE VIEW {} AS {}'.format(view_name, query))
         finally:
             cursor.close()
+
+    @rpc
+    def create_or_replace_python_function(self, name, script):
+        cursor = self.connection.cursor()
+
+        cursor.execute('SELECT COUNT(*) FROM SYS.FUNCTIONS WHERE NAME = %s', [name])
+
+        n = cursor.fetchone()[0]
+
+        try:
+            if n != 0:
+                cursor.execute('DROP FUNCTION {}'.format(name))
+
+            cursor.execute(script)
+        finally:
+            cursor.close()

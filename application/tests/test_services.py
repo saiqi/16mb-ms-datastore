@@ -166,3 +166,26 @@ def test_insert_from_select(connection):
     cursor.execute('SELECT VALUE FROM NONPART_INSERTSELECTP_TABLE WHERE ID = 1')
 
     assert cursor.fetchone()[0] == 35.
+
+
+def test_create_or_replace_python_function(connection):
+    service = worker_factory(DatastoreService, connection=connection)
+
+    script = '''
+    CREATE FUNCTION python_times_two(i INTEGER) RETURNS INTEGER LANGUAGE PYTHON {
+        return i * 2
+    };
+    '''
+
+    service.create_or_replace_python_function('python_times_two', script)
+
+    cursor = connection.cursor()
+    cursor.execute('SELECT python_times_two(2) as result')
+
+    assert cursor.fetchone()[0] == 4
+
+    service.create_or_replace_python_function('python_times_two', script)
+
+    cursor.execute('SELECT python_times_two(2) as result')
+
+    assert cursor.fetchone()[0] == 4
