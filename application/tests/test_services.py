@@ -168,6 +168,26 @@ def test_insert_from_select(connection):
     assert cursor.fetchone()[0] == 35.
 
 
+def test_check_if_function_exists(connection):
+    service = worker_factory(DatastoreService, connection=connection)
+
+    script = '''
+    CREATE FUNCTION kwnown_function(i INTEGER) RETURNS INTEGER LANGUAGE PYTHON {
+        return i * 2
+    };
+    '''
+
+    connection.execute(script)
+
+    exists = service.check_if_function_exists('kwnown_function')
+
+    assert exists is True
+
+    exists = service.check_if_function_exists('unknown_function')
+
+    assert exists is False
+
+
 def test_create_or_replace_python_function(connection):
     service = worker_factory(DatastoreService, connection=connection)
 

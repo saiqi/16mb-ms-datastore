@@ -214,15 +214,31 @@ class DatastoreService(object):
             cursor.close()
 
     @rpc
+    def check_if_function_exists(self, name):
+        cursor = self.connection.cursor()
+
+        exists = False
+
+        try:
+            cursor.execute('SELECT COUNT(*) FROM SYS.FUNCTIONS WHERE NAME = %s', [name])
+
+            n = cursor.fetchone()[0]
+
+            if n != 0:
+                exists = True
+        finally:
+            cursor.close()
+
+        return exists
+
+    @rpc
     def create_or_replace_python_function(self, name, script):
         cursor = self.connection.cursor()
 
-        cursor.execute('SELECT COUNT(*) FROM SYS.FUNCTIONS WHERE NAME = %s', [name])
-
-        n = cursor.fetchone()[0]
+        is_function_exists = self.check_if_function_exists(name)
 
         try:
-            if n != 0:
+            if is_function_exists:
                 cursor.execute('DROP FUNCTION {}'.format(name))
 
             cursor.execute(script)
