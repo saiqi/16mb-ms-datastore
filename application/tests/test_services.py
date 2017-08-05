@@ -26,7 +26,19 @@ def connection(host, user, password, database, port):
             except pymonetdb.exceptions.Error:
                 continue
 
+        cursor.close()
+
         return has_cleaned
+
+    def clean_functions():
+        cursor = _conn.cursor()
+
+        cursor.execute('SELECT NAME FROM SYS.FUNCTIONS WHERE LANGUAGE = 6')
+
+        for func in cursor.fetchall():
+            _conn.execute('DROP FUNCTION {}'.format(func[0]))
+
+        cursor.close()
 
     max_retry = 2
     has_cleaned = True
@@ -35,6 +47,8 @@ def connection(host, user, password, database, port):
     while tries < max_retry and has_cleaned:
         has_cleaned = clean_tables()
         tries += 1
+
+    clean_functions()
 
     _conn.close()
 
@@ -51,6 +65,22 @@ def test_insert(connection):
     cursor.execute('SELECT COUNT(*) FROM NONPART_INSERT_TABLE')
 
     assert cursor.fetchone()[0] == 2
+
+
+def test_truncate(connection):
+    service = worker_factory(DatastoreService, connection=connection)
+
+    records = [{'ID': 1, 'VALUE': 'toto'}, {'ID': 2, 'VALUE': 'titi'}]
+    meta = [('ID', 'INTEGER'), ('VALUE', 'VARCHAR(5)')]
+
+    service.insert('NONPART_TRUNCATE_TABLE', records, meta)
+
+    service.truncate('NONPART_TRUNCATE_TABLE')
+
+    cursor = connection.cursor()
+    cursor.execute('SELECT COUNT(*) FROM NONPART_TRUNCATE_TABLE')
+
+    assert cursor.fetchone()[0] == 0
 
 
 def test_delete(connection):

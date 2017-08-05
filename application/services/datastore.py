@@ -110,6 +110,24 @@ class DatastoreService(object):
                 cursor.close()
 
     @rpc
+    def truncate(self, target_table):
+        table_exists = True
+
+        cursor = self.connection.cursor()
+
+        try:
+            cursor.execute('SELECT 1 FROM {}'.format(target_table))
+        except pymonetdb.exceptions.OperationalError:
+            table_exists = False
+            pass
+
+        if table_exists:
+            try:
+                cursor.execute('DELETE FROM {}'.format(target_table))
+            finally:
+                cursor.close()
+
+    @rpc
     def update(self, target_table, update_key, updated_records):
 
         cursor = self.connection.cursor()
