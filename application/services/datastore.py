@@ -10,7 +10,7 @@ class DatastoreService(object):
 
     connection = MonetDbConnection()
 
-    def _create_table(self, table_name, meta, query=None, params=None):
+    def _create_table(self, table_name, meta, is_merge_table=False, query=None, params=None):
 
         if meta is not None:
             columns = ','.join('{name} {type}'.format(name=name, type=data_type) for name, data_type in meta)
@@ -19,8 +19,12 @@ class DatastoreService(object):
 
         try:
             if query is None:
-                self.connection.execute(
-                    'CREATE TABLE {table} ({columns})'.format(table=table_name, columns=columns))
+                if is_merge_table:
+                    self.connection.execute(
+                        'CREATE MERGE TABLE {table} ({columns})'.format(table=table_name, columns=columns))
+                else:
+                    self.connection.execute(
+                        'CREATE TABLE {table} ({columns})'.format(table=table_name, columns=columns))
             else:
                 if params is None:
                     self.connection.execute(
@@ -35,6 +39,19 @@ class DatastoreService(object):
     def _drop_table(self, table_name):
         self.connection.execute('DROP TABLE {table}'.format(table=table_name))
 
+    def _check_if_table_exists(self, table_name):
+        cursor = self.connection.cursor()
+        table_exists = True
+        try:
+            cursor.execute('SELECT 1 FROM {} LIMIT 1'.format(table_name))
+        except pymonetdb.exceptions.OperationalError:
+            table_exists = False
+            pass
+        finally:
+            cursor.close()
+
+        return table_exists
+
     @staticmethod
     def _handle_records(records):
         if isinstance(records, str):
@@ -46,14 +63,30 @@ class DatastoreService(object):
         return records
 
     @rpc
-    def insert_from_select(self, target_table, query, params):
-        cursor = self.connection.cursor()
+    def add_partition(self, target_table, merge_table, meta):
+        table_exists = self._check_if_table_exists(merge_table)
 
-        try:
-            cursor.execute('SELECT 1 FROM {}'.format(target_table))
-        except pymonetdb.exceptions.OperationalError:
-            self._create_table(target_table, None, query, params)
-            pass
+        if table_exists is False:
+            self._create_table(merge_table, meta, True)
+
+        self.connection.execute('ALTER TABLE {} ADD TABLE {}'.format(merge_table, target_table))
+
+    @rpc
+    def drop_partition(self, target_table, merge_table):
+        table_exists = self._check_if_table_exists(merge_table)
+        partition_exists = self._check_if_table_exists(target_table)
+
+        if table_exists is True and partition_exists is True:
+            self.connection.execute('ALTER TABLE {} DROP TABLE {}'.format(merge_table, target_table))
+
+    @rpc
+    def insert_from_select(self, target_table, query, params):
+        table_exists = self._check_if_table_exists(target_table)
+
+        if table_exists is False:
+            self._create_table(target_table, None, False, query, params)
+
+        cursor = self.connection.cursor()
 
         try:
             if params is None:
@@ -65,13 +98,12 @@ class DatastoreService(object):
 
     @rpc
     def insert(self, target_table, records, meta):
-        cursor = self.connection.cursor()
+        table_exists = self._check_if_table_exists(target_table)
 
-        try:
-            cursor.execute('SELECT 1 FROM {table}'.format(table=target_table))
-        except pymonetdb.exceptions.OperationalError:
+        if table_exists is False:
             self._create_table(target_table, meta)
-            pass
+
+        cursor = self.connection.cursor()
 
         try:
             for row in self._handle_records(records):
@@ -87,15 +119,9 @@ class DatastoreService(object):
     def delete(self, target_table, delete_keys):
         records = self._handle_records(delete_keys)
 
-        table_exists = True
+        table_exists = self._check_if_table_exists(target_table)
 
         cursor = self.connection.cursor()
-
-        try:
-            cursor.execute('SELECT 1 FROM {}'.format(target_table))
-        except pymonetdb.exceptions.OperationalError:
-            table_exists = False
-            pass
 
         if table_exists:
             if len(records.keys()) > 1:
@@ -111,15 +137,9 @@ class DatastoreService(object):
 
     @rpc
     def truncate(self, target_table):
-        table_exists = True
+        table_exists = self._check_if_table_exists(target_table)
 
         cursor = self.connection.cursor()
-
-        try:
-            cursor.execute('SELECT 1 FROM {}'.format(target_table))
-        except pymonetdb.exceptions.OperationalError:
-            table_exists = False
-            pass
 
         if table_exists:
             try:
@@ -147,14 +167,12 @@ class DatastoreService(object):
 
     @rpc
     def upsert(self, target_table, upsert_key, records, meta):
+        table_exists = self._check_if_table_exists(target_table)
+
+        if table_exists is False:
+            self._create_table(target_table, meta)
 
         cursor = self.connection.cursor()
-
-        try:
-            cursor.execute('SELECT 1 FROM {table}'.format(table=target_table))
-        except pymonetdb.exceptions.OperationalError:
-            self._create_table(target_table, meta)
-            pass
 
         try:
             for row in self._handle_records(records):
@@ -183,13 +201,9 @@ class DatastoreService(object):
 
     @rpc
     def bulk_insert(self, target_table, records, meta, mapping=None):
-        cursor = self.connection.cursor()
-
-        try:
-            cursor.execute('SELECT 1 FROM {table}'.format(table=target_table))
-        except pymonetdb.exceptions.OperationalError:
+        table_exists = self._check_if_table_exists(target_table)
+        if table_exists is False:
             self._create_table(target_table, meta)
-            pass
 
         string_records = list()
         n = 0
@@ -213,12 +227,7 @@ class DatastoreService(object):
     @rpc
     def create_or_replace_view(self, view_name, query, params):
         cursor = self.connection.cursor()
-        existed = True
-        try:
-            cursor.execute('SELECT 1 FROM {} LIMIT 1'.format(view_name))
-        except pymonetdb.exceptions.OperationalError:
-            existed = False
-            pass
+        existed = self._check_if_table_exists(view_name)
 
         try:
             if existed is True:

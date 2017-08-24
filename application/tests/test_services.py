@@ -239,3 +239,38 @@ def test_create_or_replace_python_function(connection):
     cursor.execute('SELECT python_times_two(2) as result')
 
     assert cursor.fetchone()[0] == 4
+
+
+def test_add_partition(connection):
+    service = worker_factory(DatastoreService, connection=connection)
+
+    connection.execute('CREATE TABLE T1 (ID INTEGER)')
+    connection.execute('INSERT INTO T1 VALUES (1)')
+
+    service.add_partition('T1', 'MT1', [('ID', 'INTEGER')])
+
+    cursor = connection.cursor()
+    cursor.execute('SELECT ID FROM MT1')
+
+    assert cursor.fetchone()[0] == 1
+
+
+def test_drop_paritition(connection):
+    service = worker_factory(DatastoreService, connection=connection)
+
+    connection.execute('CREATE TABLE T2 (ID INTEGER)')
+    connection.execute('INSERT INTO T2 VALUES (1)')
+
+    connection.execute('CREATE TABLE T3 (ID INTEGER)')
+    connection.execute('INSERT INTO T3 VALUES (2)')
+
+    connection.execute('CREATE MERGE TABLE MT2 (ID INTEGER)')
+    connection.execute('ALTER TABLE MT2 ADD TABLE T2')
+    connection.execute('ALTER TABLE MT2 ADD TABLE T3')
+
+    service.drop_partition('T2', 'MT2')
+
+    cursor = connection.cursor()
+    cursor.execute('SELECT ID FROM MT2')
+
+    assert cursor.fetchone()[0] == 2
