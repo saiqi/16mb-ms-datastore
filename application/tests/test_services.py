@@ -1,5 +1,6 @@
 import pytest
 import pymonetdb
+import pymonetdb.exceptions
 from nameko.testing.services import worker_factory
 
 from application.services.datastore import DatastoreService
@@ -163,6 +164,10 @@ def test_bulk_insert(connection):
     cursor.execute('SELECT VALUE FROM NONPART_BULK_TABLE WHERE ID = 4')
 
     assert cursor.fetchone()[0] == 'tata'
+
+    wrong_records = [{'ID': 'wrong', 'VALUE': 'titi'}]
+    with pytest.raises(pymonetdb.exceptions.OperationalError):
+        service.bulk_insert('NONPART_BULK_TABLE', wrong_records, meta)
 
 
 def test_create_or_replace_view(connection):

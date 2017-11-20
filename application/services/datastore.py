@@ -1,5 +1,6 @@
 from nameko.rpc import rpc
 import pymonetdb
+import pymonetdb.exceptions
 from bson.json_util import loads
 
 from application.dependencies.monetdb import MonetDbConnection
@@ -222,7 +223,11 @@ class DatastoreService(object):
 
         cmd = 'sCOPY {n} RECORDS INTO {table} FROM STDIN NULL AS \'\';{data}\n'.format(n=n, table=target_table,
                                                                                        data=data)
-        self.connection.command(cmd)
+        try:
+            self.connection.command(cmd)
+        except pymonetdb.exceptions.OperationalError:
+            self.connection.rollback()
+            raise
 
     @rpc
     def create_or_replace_view(self, view_name, query, params):
