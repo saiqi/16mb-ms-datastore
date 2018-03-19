@@ -153,21 +153,27 @@ def test_bulk_insert(connection):
 
     cursor = connection.cursor()
     cursor.execute('SELECT VALUE FROM NONPART_BULK_TABLE WHERE ID = 2')
-
     assert cursor.fetchone()[0] == 'titi'
 
     records = [{'ID': 3, 'VALUE': 'tutu'}, {'ID': 4, 'VALUE': 'tata'}]
-
     service.bulk_insert('NONPART_BULK_TABLE', records, meta)
-
-    cursor = connection.cursor()
     cursor.execute('SELECT VALUE FROM NONPART_BULK_TABLE WHERE ID = 4')
-
     assert cursor.fetchone()[0] == 'tata'
 
     wrong_records = [{'ID': 'wrong', 'VALUE': 'titi'}]
     with pytest.raises(pymonetdb.exceptions.OperationalError):
         service.bulk_insert('NONPART_BULK_TABLE', wrong_records, meta)
+
+    cursor.execute('DELETE FROM NONPART_BULK_TABLE')
+    records = [
+        {'id': 1, 'value': 'toto'},
+        {'value': 'titi', 'id': 2},
+        {'id': 3, 'value': 'tutu'},
+        {'id': 4, 'value': 'tata'}
+    ]
+    service.bulk_insert('NONPART_BULK_TABLE', records, meta, mapping={'ID': 'id', 'VALUE': 'value'}, chunck_size=3)
+    cursor.execute('SELECT COUNT(*) FROM NONPART_BULK_TABLE')
+    assert cursor.fetchone()[0] == 4
 
 
 def test_create_or_replace_view(connection):
