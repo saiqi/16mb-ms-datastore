@@ -217,7 +217,6 @@ class DatastoreService(object):
             string_records = list()
             n = 0
             for r in chunck:
-                print(r)
                 ordered_record = list()
                 for m in meta:
                     if mapping is None:
