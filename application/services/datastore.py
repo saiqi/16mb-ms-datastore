@@ -1,3 +1,4 @@
+import logging
 from logging import getLogger
 from nameko.rpc import rpc
 import pymonetdb
@@ -6,6 +7,7 @@ from bson.json_util import loads
 
 from application.dependencies.monetdb import MonetDbConnection
 
+logging.getLogger('pymonetdb').setLevel(logging.ERROR)
 _log = getLogger(__name__)
 
 
