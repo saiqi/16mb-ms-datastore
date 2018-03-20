@@ -1,9 +1,12 @@
+from logging import getLogger
 from nameko.rpc import rpc
 import pymonetdb
 import pymonetdb.exceptions
 from bson.json_util import loads
 
 from application.dependencies.monetdb import MonetDbConnection
+
+_log = getLogger(__name__)
 
 
 class DatastoreService(object):
@@ -12,7 +15,7 @@ class DatastoreService(object):
     connection = MonetDbConnection()
 
     def _create_table(self, table_name, meta, is_merge_table=False, query=None, params=None):
-
+        _log.info('Creating table {} table_name'.format(table_name))
         if meta is not None:
             columns = ','.join('{name} {type}'.format(name=name, type=data_type) for name, data_type in meta)
 
@@ -65,6 +68,7 @@ class DatastoreService(object):
 
     @rpc
     def add_partition(self, target_table, merge_table, meta):
+        _log.info('Adding partition on  table {}'.format(merge_table))
         table_exists = self._check_if_table_exists(merge_table)
 
         if table_exists is False:
@@ -74,6 +78,7 @@ class DatastoreService(object):
 
     @rpc
     def drop_partition(self, target_table, merge_table):
+        _log.info('Dropping partition on  table {}'.format(merge_table))
         table_exists = self._check_if_table_exists(merge_table)
         partition_exists = self._check_if_table_exists(target_table)
 
@@ -82,6 +87,7 @@ class DatastoreService(object):
 
     @rpc
     def insert_from_select(self, target_table, query, params):
+        _log.info('Inserting data into {} from select'.format(target_table))
         table_exists = self._check_if_table_exists(target_table)
 
         if table_exists is False:
@@ -99,6 +105,7 @@ class DatastoreService(object):
 
     @rpc
     def insert(self, target_table, records, meta):
+        _log.info('Inserting records into {}'.format(target_table))
         table_exists = self._check_if_table_exists(target_table)
 
         if table_exists is False:
@@ -118,6 +125,7 @@ class DatastoreService(object):
 
     @rpc
     def delete(self, target_table, delete_keys):
+        _log.info('Deleting records into {}'.format(target_table))
         records = self._handle_records(delete_keys)
 
         table_exists = self._check_if_table_exists(target_table)
@@ -138,6 +146,7 @@ class DatastoreService(object):
 
     @rpc
     def truncate(self, target_table):
+        _log.info('Truncating records into {}'.format(target_table))
         table_exists = self._check_if_table_exists(target_table)
 
         cursor = self.connection.cursor()
@@ -150,7 +159,7 @@ class DatastoreService(object):
 
     @rpc
     def update(self, target_table, update_key, updated_records):
-
+        _log.info('Updating records into {}'.format(target_table))
         cursor = self.connection.cursor()
 
         try:
@@ -168,6 +177,7 @@ class DatastoreService(object):
 
     @rpc
     def upsert(self, target_table, upsert_key, records, meta):
+        _log.info('Upserting records into {}'.format(target_table))
         table_exists = self._check_if_table_exists(target_table)
 
         if table_exists is False:
@@ -202,6 +212,7 @@ class DatastoreService(object):
 
     @rpc
     def bulk_insert(self, target_table, records, meta, mapping=None):
+        _log.info('Bulk inserting records into {}'.format(target_table))
         table_exists = self._check_if_table_exists(target_table)
         if table_exists is False:
             self._create_table(target_table, meta)
@@ -231,6 +242,7 @@ class DatastoreService(object):
 
     @rpc
     def create_or_replace_view(self, view_name, query, params):
+        _log.info('Creating views into {}'.format(view_name))
         cursor = self.connection.cursor()
         existed = self._check_if_table_exists(view_name)
 
@@ -265,6 +277,7 @@ class DatastoreService(object):
 
     @rpc
     def create_or_replace_python_function(self, name, script):
+        _log.info('Creating python function into {}'.format(name))
         cursor = self.connection.cursor()
 
         is_function_exists = self.check_if_function_exists(name)

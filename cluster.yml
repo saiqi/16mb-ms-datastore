@@ -11,3 +11,12 @@ MONGODB_CONNECTION_URL: ${MONGODB_CONNECTION_URL}
 MONGODB_USER: ${MONGODB_USER}
 MONGODB_PASSWORD: ${MONGODB_PASSWORD}
 MONGODB_AUTHENTICATION_BASE: ${MONGODB_AUTHENTICATION_BASE}
+
+LOGGING:
+    version: 1
+    handlers:
+        console:
+            class: logging.StreamHandler
+    root:
+        level: DEBUG
+        handlers: [console]
