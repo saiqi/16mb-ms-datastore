@@ -171,7 +171,7 @@ def test_bulk_insert(connection):
         {'id': 3, 'value': 'tutu'},
         {'id': 4, 'value': 'tata'}
     ]
-    service.bulk_insert('NONPART_BULK_TABLE', records, meta, mapping={'ID': 'id', 'VALUE': 'value'}, chunck_size=3)
+    service.bulk_insert('NONPART_BULK_TABLE', records, meta, mapping={'ID': 'id', 'VALUE': 'value'}, chunk_size=3)
     cursor.execute('SELECT COUNT(*) FROM NONPART_BULK_TABLE')
     assert cursor.fetchone()[0] == 4
 

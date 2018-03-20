@@ -1,5 +1,6 @@
 import logging
 from logging import getLogger
+import time
 from nameko.rpc import rpc
 import pymonetdb
 import pymonetdb.exceptions
@@ -69,7 +70,7 @@ class DatastoreService(object):
         return records
 
     @staticmethod
-    def _chunck_records(l, n):
+    def _chunk_records(l, n):
         for i in range(0, len(l), n):
             yield l[i:i+n]
 
@@ -224,7 +225,7 @@ class DatastoreService(object):
         _log.info('Success !')
 
     @rpc
-    def bulk_insert(self, target_table, records, meta, mapping=None, chunck_size=2500):
+    def bulk_insert(self, target_table, records, meta, mapping=None, chunk_size=2500):
         _log.info('Bulk inserting records into {}'.format(target_table))
         table_exists = self._check_if_table_exists(target_table)
         if table_exists is False:
@@ -232,11 +233,11 @@ class DatastoreService(object):
 
         clean_records = self._handle_records(records)
 
-        for chunck in self._chunck_records(clean_records, chunck_size):
-            _log.info('Processing a {} chunck'.format(str(chunck_size)))
+        for chunk in self._chunk_records(clean_records, chunk_size):
+            _log.info('Processing a {} chunk'.format(str(chunk_size)))
             string_records = list()
             n = 0
-            for r in chunck:
+            for r in chunk:
                 ordered_record = list()
                 for m in meta:
                     if mapping is None:
