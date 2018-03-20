@@ -109,6 +109,7 @@ class DatastoreService(object):
                 cursor.execute('INSERT INTO {table} {query}'.format(table=target_table, query=query), params)
         finally:
             cursor.close()
+        _log.info('Success !')
 
     @rpc
     def insert(self, target_table, records, meta):
@@ -129,6 +130,7 @@ class DatastoreService(object):
                     list(row.values()))
         finally:
             cursor.close()
+        _log.info('Success !')
 
     @rpc
     def delete(self, target_table, delete_keys):
@@ -150,6 +152,7 @@ class DatastoreService(object):
                                list(records.values()))
             finally:
                 cursor.close()
+        _log.info('Success !')
 
     @rpc
     def truncate(self, target_table):
@@ -163,6 +166,7 @@ class DatastoreService(object):
                 cursor.execute('DELETE FROM {}'.format(target_table))
             finally:
                 cursor.close()
+        _log.info('Success !')
 
     @rpc
     def update(self, target_table, update_key, updated_records):
@@ -181,6 +185,7 @@ class DatastoreService(object):
                     , params)
         finally:
             cursor.close()
+        _log.info('Success !')
 
     @rpc
     def upsert(self, target_table, upsert_key, records, meta):
@@ -216,6 +221,7 @@ class DatastoreService(object):
                         list(row.values()))
         finally:
             cursor.close()
+        _log.info('Success !')
 
     @rpc
     def bulk_insert(self, target_table, records, meta, mapping=None, chunck_size=2500):
@@ -250,6 +256,7 @@ class DatastoreService(object):
             except pymonetdb.exceptions.OperationalError:
                 self.connection.rollback()
                 raise
+        _log.info('Success !')
 
     @rpc
     def create_or_replace_view(self, view_name, query, params):

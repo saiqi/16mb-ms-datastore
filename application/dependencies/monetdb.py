@@ -21,8 +21,7 @@ class MonetDbConnection(DependencyProvider):
         return conn
 
     def setup(self):
-
-        self.maxsize = self.container.config['max_workers']
+        self.maxsize = 10
         self.connection_pool = Queue(maxsize=self.maxsize)
 
         for c in range(self.maxsize):
