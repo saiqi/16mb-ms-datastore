@@ -66,6 +66,11 @@ class DatastoreService(object):
                 return [converted]
         return records
 
+    @staticmethod
+    def _chunck_records(l, n):
+        for i in range(0, len(l), n):
+            yield l[i:i+n]
+
     @rpc
     def add_partition(self, target_table, merge_table, meta):
         _log.info('Adding partition on  table {}'.format(merge_table))
@@ -211,34 +216,38 @@ class DatastoreService(object):
             cursor.close()
 
     @rpc
-    def bulk_insert(self, target_table, records, meta, mapping=None):
+    def bulk_insert(self, target_table, records, meta, mapping=None, chunck_size=2500):
         _log.info('Bulk inserting records into {}'.format(target_table))
         table_exists = self._check_if_table_exists(target_table)
         if table_exists is False:
             self._create_table(target_table, meta)
 
-        string_records = list()
-        n = 0
-        for r in self._handle_records(records):
-            ordered_record = list()
-            for m in meta:
-                if mapping is None:
-                    key = m[0]
-                else:
-                    key = mapping[m[0]]
-                ordered_record.append('' if r[key] is None else str(r[key]))
-            string_records.append('|'.join(ordered_record))
-            n += 1
+        clean_records = self._handle_records(records)
 
-        data = '\n'.join(string_records)
+        for chunck in self._chunck_records(clean_records, chunck_size):
+            _log.info('Processing a {} chunck'.format(str(chunck_size)))
+            string_records = list()
+            n = 0
+            for r in chunck:
+                ordered_record = list()
+                for m in meta:
+                    if mapping is None:
+                        key = m[0]
+                    else:
+                        key = mapping[m[0]]
+                    ordered_record.append('' if r[key] is None else str(r[key]))
+                string_records.append('|'.join(ordered_record))
+                n += 1
 
-        cmd = 'sCOPY {n} RECORDS INTO {table} FROM STDIN NULL AS \'\';{data}\n'.format(n=n, table=target_table,
-                                                                                       data=data)
-        try:
-            self.connection.command(cmd)
-        except pymonetdb.exceptions.OperationalError:
-            self.connection.rollback()
-            raise
+            data = '\n'.join(string_records)
+
+            cmd = 'sCOPY {n} RECORDS INTO {table} FROM STDIN NULL AS \'\';{data}\n'.format(n=n, table=target_table,
+                                                                                           data=data)
+            try:
+                self.connection.command(cmd)
+            except pymonetdb.exceptions.OperationalError:
+                self.connection.rollback()
+                raise
 
     @rpc
     def create_or_replace_view(self, view_name, query, params):
