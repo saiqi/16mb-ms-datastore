@@ -1,0 +1,4 @@
+nameko==2.12.0
+pymongo==3.8.0
+nameko-mongodb==1.1.1
+pymonetdb==1.1.1
