@@ -260,8 +260,8 @@ class DatastoreService(object):
         _log.info('Success !')
 
     @rpc
-    def create_or_replace_view(self, view_name, query, params):
-        _log.info('Creating views into {}'.format(view_name))
+    def create_or_replace_view(self, view_name, query, params=None):
+        _log.info('Creating view {}'.format(view_name))
         cursor = self.connection.cursor()
         existed = self._check_if_table_exists(view_name)
 
