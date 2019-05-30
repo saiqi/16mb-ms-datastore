@@ -18,7 +18,7 @@ class DummyService(object):
     def insert(self):
         cursor = self.connection.cursor()
 
-        cursor.execute('INSERT INTO TEST_TABLE (ID) VALUES (1)');
+        cursor.execute('INSERT INTO TEST_TABLE (ID) VALUES (1)')
 
     @dummy
     def select(self):

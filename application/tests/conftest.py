@@ -1,47 +1,34 @@
 import eventlet
 eventlet.monkey_patch()
 
+import os
 import pytest
 from nameko.containers import ServiceContainer
 
 
-def pytest_addoption(parser):
-    parser.addoption('--test-db-host', action='store', dest='TEST_DB_HOST')
-    parser.addoption('--test-db-user', action='store', dest='TEST_DB_USER')
-    parser.addoption('--test-db-password', action='store', dest='TEST_DB_PASSWORD')
-    parser.addoption('--test-db-database', action='store', dest='TEST_DB_DATABASE')
-    parser.addoption('--test-db-port', action='store', dest='TEST_DB_PORT')
-    parser.addoption('--test-db-url', action='store', dest='TEST_DB_URL')
-
-
-@pytest.fixture
-def db_url(request):
-    return request.config.getoption('TEST_DB_URL')
-
-
 @pytest.fixture
 def host(request):
-    return request.config.getoption('TEST_DB_HOST')
+    return os.getenv('TEST_DB_HOST')
 
 
 @pytest.fixture
 def user(request):
-    return request.config.getoption('TEST_DB_USER')
+    return os.getenv('TEST_DB_USER')
 
 
 @pytest.fixture
 def password(request):
-    return request.config.getoption('TEST_DB_PASSWORD')
+    return os.getenv('TEST_DB_PASSWORD')
 
 
 @pytest.fixture
 def database(request):
-    return request.config.getoption('TEST_DB_DATABASE')
+    return os.getenv('TEST_DB_DATABASE')
 
 
 @pytest.fixture
 def port(request):
-    return request.config.getoption('TEST_DB_PORT')
+    return os.getenv('TEST_DB_PORT')
 
 
 @pytest.yield_fixture

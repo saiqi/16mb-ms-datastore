@@ -2,6 +2,7 @@ import logging
 from logging import getLogger
 import time
 from nameko.rpc import rpc
+from nameko.dependency_providers import DependencyProvider
 import pymonetdb
 import pymonetdb.exceptions
 from bson.json_util import loads
@@ -11,10 +12,19 @@ from application.dependencies.monetdb import MonetDbConnection
 logging.getLogger('pymonetdb').setLevel(logging.ERROR)
 _log = getLogger(__name__)
 
+class ErrorHandler(DependencyProvider):
+
+    def worker_result(self, worker_ctx, res, exc_info):
+        if exc_info is None:
+            return
+
+        exc_type, exc, tb = exc_info
+        _log.error(str(exc))
+
 
 class DatastoreService(object):
     name = 'datastore'
-
+    error = ErrorHandler()
     connection = MonetDbConnection()
 
     def _create_table(self, table_name, meta, is_merge_table=False, query=None, params=None):
