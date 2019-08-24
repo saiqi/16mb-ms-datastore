@@ -262,11 +262,7 @@ class DatastoreService(object):
 
             cmd = 'sCOPY {n} RECORDS INTO {table} FROM STDIN NULL AS \'\';{data}\n'.format(n=n, table=target_table,
                                                                                            data=data)
-            try:
-                self.connection.command(cmd)
-            except pymonetdb.exceptions.OperationalError:
-                self.connection.rollback()
-                raise
+            self.connection.command(cmd)
         _log.info('Success !')
 
     @rpc
