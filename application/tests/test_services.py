@@ -34,10 +34,11 @@ def connection(host, user, password, database, port):
     def clean_functions():
         cursor = _conn.cursor()
 
-        cursor.execute('SELECT NAME FROM SYS.FUNCTIONS WHERE LANGUAGE = 6')
+        cursor.execute('SELECT NAME, TYPE FROM SYS.FUNCTIONS WHERE LANGUAGE = 6')
 
         for func in cursor.fetchall():
-            _conn.execute('DROP FUNCTION {}'.format(func[0]))
+            _conn.execute('DROP AGGREGATE {}'.format(func[0])) if func[1] == 3\
+                else _conn.execute('DROP FUNCTION {}'.format(func[0]))
 
         cursor.close()
 
@@ -250,6 +251,28 @@ def test_create_or_replace_python_function(connection):
     cursor.execute('SELECT python_times_two(2) as result')
 
     assert cursor.fetchone()[0] == 4
+
+def test_create_or_replace_aggregate(connection):
+    service = worker_factory(DatastoreService, connection=connection)
+
+    script = '''
+    CREATE AGGREGATE python_aggregate(val INTEGER) 
+    RETURNS INTEGER 
+    LANGUAGE PYTHON {
+        try:
+            unique = numpy.unique(aggr_group)
+            x = numpy.zeros(shape=(unique.size))
+            for i in range(0, unique.size):
+                x[i] = numpy.sum(val[aggr_group==unique[i]])
+        except NameError:
+            # aggr_group doesn't exist. no groups, aggregate on all data
+            x = numpy.sum(val)
+        return(x)
+    };
+    '''
+
+    service.create_or_replace_python_function('python_aggregate', script)
+    service.create_or_replace_python_function('python_aggregate', script)
 
 
 def test_add_partition(connection):

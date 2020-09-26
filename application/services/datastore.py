@@ -300,16 +300,29 @@ class DatastoreService(object):
 
         return exists
 
+    def get_function_type(self, name):
+        cursor = self.connection.cursor()
+
+        try:
+            cursor.execute('SELECT TYPE FROM SYS.FUNCTIONS WHERE NAME = %s', [name])
+
+            r = cursor.fetchone()
+
+            return r[0] if r else None
+        finally:
+            cursor.close()
+
     @rpc
     def create_or_replace_python_function(self, name, script):
         _log.info('Creating python function into {}'.format(name))
         cursor = self.connection.cursor()
 
-        is_function_exists = self.check_if_function_exists(name)
+        f_type = self.get_function_type(name)
 
         try:
-            if is_function_exists:
-                cursor.execute('DROP FUNCTION {}'.format(name))
+            if f_type:
+                cursor.execute('DROP AGGREGATE {}'.format(name) if f_type == 3\
+                    else 'DROP FUNCTION {}'.format(name))
 
             cursor.execute(script)
         finally:
